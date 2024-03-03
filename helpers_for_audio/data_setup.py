@@ -1,9 +1,12 @@
 import torch
 import os
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 from pathlib import Path
 from typing import Tuple, List, Dict
+
+from torchvision import datasets, transforms
 import librosa
+import soundfile
 
 
 def find_classes(directory: str) -> Tuple[List[str], Dict[str, int]]:
@@ -39,3 +42,44 @@ class CustomAudioDataset(Dataset):
             return self.transform(audio), class_idx
         else:
             return audio, class_idx
+
+    def get_filepath(self, idx: int) -> Path:
+        return self.paths[idx]
+
+# takes tensor and output file paths as input and returns the path of the output file in str format
+
+
+def convert_tensor_to_audio(y: torch.Tensor, filename: str | Path, output_dir: str, sr: int = 16000) -> str:
+    output_file_path = Path(output_dir) / Path(filename)
+    y = y.numpy()
+    soundfile.write(output_file_path, y=y, sr=sr)
+    return str(output_file_path)
+
+
+def create_dataloaders(train_dir: str,
+                       test_dir: str,
+                       transform: transforms.Compose,
+                       batch_size: int,
+                       num_workers: int = 1):
+
+    train_dataset = CustomAudioDataset(target_dir=train_dir,
+                                       transform=transform,
+                                       )
+    test_dataset = CustomAudioDataset(target_dir=test_dir,
+                                      transform=transform)
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+
+    return train_dataloader, test_dataloader, train_dataset.classes
