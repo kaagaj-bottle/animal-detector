@@ -1,6 +1,7 @@
 import torch
 import os
 from torch.utils.data import DataLoader, Dataset
+import torch.nn.functional as F
 from pathlib import Path
 from typing import Tuple, List, Dict
 import numpy as np
@@ -19,7 +20,6 @@ default_mfcc_params = {
     "norm_mfcc": "ortho",
     "dct_type": 2,
 }
-
 
 
 def find_classes(directory: str) -> Tuple[List[str], Dict[str, int]]:
@@ -54,6 +54,7 @@ class CustomAudioDataset(Dataset):
         audio = mfcc_transform(y=audio,
                                sr=sr,
                                mfcc_params=self.mfcc_params)
+        audio = expand_tensor_for_efficient_net(audio)
         class_name = self.paths[index].parent.name
         class_idx = self.class_to_idx[class_name]
 
@@ -126,3 +127,12 @@ def mfcc_transform(y: np.ndarray,
     )
 
     return torch.from_numpy(mfcc_librosa)
+
+
+def expand_tensor_for_efficient_net(y) -> torch.Tensor:
+    input_tensor_expanded = y.expand(3, -1, -1)
+    resized_tensor = F.interpolate(input_tensor_expanded.unsqueeze(
+        0), size=(224, 224), mode='bilinear', align_corners=False)
+
+    resized_tensor = resized_tensor.squeeze()
+    return resized_tensor
