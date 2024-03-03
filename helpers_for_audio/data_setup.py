@@ -3,10 +3,23 @@ import os
 from torch.utils.data import DataLoader, Dataset
 from pathlib import Path
 from typing import Tuple, List, Dict
-
+import numpy as np
 from torchvision import datasets, transforms
 import librosa
 import soundfile
+
+default_mfcc_params = {
+    "n_fft": 2048,
+    "win_length": None,
+    "n_mels": 256,
+    "hop_length": 512,
+    "htk": True,
+    "norm_melspec": None,
+    "n_mfcc": 256,
+    "norm_mfcc": "ortho",
+    "dct_type": 2,
+}
+
 
 
 def find_classes(directory: str) -> Tuple[List[str], Dict[str, int]]:
@@ -21,22 +34,26 @@ def find_classes(directory: str) -> Tuple[List[str], Dict[str, int]]:
 
 class CustomAudioDataset(Dataset):
 
-    def __init__(self, target_dir: str, transform=None, sr: int = 16000) -> None:
+    def __init__(self, target_dir: str, transform=None, mfcc_params: Dict = default_mfcc_params, sr: int = 16000) -> None:
         self.paths = list(Path(target_dir).glob("*/*.wav"))
         self.transform = transform
         self.classes, self.class_to_idx = find_classes(target_dir)
         self.sr = sr
+        self.mfcc_params = mfcc_params
 
-    def load_audio(self, index: int) -> torch.Tensor:
+    def load_audio(self, index: int) -> Tuple[np.ndarray, int]:
         audio_path = self.paths[index]
-        audio, _ = librosa.load(audio_path, sr=self.sr)
-        audio = torch.from_numpy(audio)
-        return audio
-    def __len__(self)->int:
+        audio, sr = librosa.load(audio_path, sr=self.sr)
+        return audio, sr
+
+    def __len__(self) -> int:
         return len(self.paths)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
-        audio = self.load_audio(index)
+        audio, sr = self.load_audio(index)
+        audio = mfcc_transform(y=audio,
+                               sr=sr,
+                               mfcc_params=self.mfcc_params)
         class_name = self.paths[index].parent.name
         class_idx = self.class_to_idx[class_name]
 
@@ -85,3 +102,27 @@ def create_dataloaders(train_dir: str,
     )
 
     return train_dataloader, test_dataloader, train_dataset.classes
+
+
+def mfcc_transform(y: np.ndarray,
+                   sr: int,
+                   mfcc_params: Dict
+                   ) -> torch.Tensor:
+    melspec = librosa.feature.melspectrogram(
+        y=y,
+        sr=sr,
+        n_fft=mfcc_params['n_fft'],
+        win_length=mfcc_params['win_length'],
+        hop_length=mfcc_params['hop_length'],
+        n_mels=mfcc_params['n_mels'],
+        htk=mfcc_params['htk'],
+        norm=mfcc_params['norm_melspec'],
+    )
+    mfcc_librosa = librosa.feature.mfcc(
+        S=librosa.core.spectrum.power_to_db(melspec),
+        n_mfcc=mfcc_params['n_mfcc'],
+        dct_type=mfcc_params['dct_type'],
+        norm=mfcc_params['norm_mfcc']
+    )
+
+    return torch.from_numpy(mfcc_librosa)
