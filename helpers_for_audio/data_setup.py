@@ -32,6 +32,8 @@ class CustomAudioDataset(Dataset):
         audio, _ = librosa.load(audio_path, sr=self.sr)
         audio = torch.from_numpy(audio)
         return audio
+    def __len__(self)->int:
+        return len(self.paths)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
         audio = self.load_audio(index)
