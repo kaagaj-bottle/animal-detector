@@ -11,8 +11,6 @@ print(f'Device: {device}')
 def construct_model(output_shape:int):
     model=efficientnet_b0(weights="DEFAULT").to(device)
 
-    for param in model.features.parameters():
-        param.requires_grad=False    
     
     model.classifier=torch.nn.Sequential(
         torch.nn.Dropout(p=0.2,inplace=True),
